@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ASCII-3D</title>
+<style>
+:root{--bg:#04243a;--fg:#38bdf8;color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{background:var(--bg);color:var(--fg);font:13px/1.25 ui-monospace,Menlo,Consolas,"Courier New",monospace;transition:background .7s,color .7s;overflow:hidden}
+#sc{position:fixed;left:0;top:0;z-index:0;margin:0;overflow:hidden;pointer-events:none;white-space:pre;text-shadow:0 0 2px var(--fg);font-family:ui-monospace,Menlo,Consolas,"Courier New",monospace}
+main{position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column;justify-content:space-between;padding:12px 10px 16px;pointer-events:none;max-width:460px;margin:0 auto}
+main>*{pointer-events:auto}
+pre{margin:0;font:inherit}
+.panel{background:color-mix(in srgb,var(--bg) 80%,transparent);overflow-x:auto;margin:6px 0;width:max-content;max-width:100%}
+nav,#zoo{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+button{cursor:pointer;font:inherit;color:var(--fg);background:color-mix(in srgb,var(--bg) 70%,transparent);border:0;padding:2px 0;white-space:pre}
+button:hover,button.on{background:var(--fg);color:var(--bg)}
+#me{position:fixed;left:0;top:0;z-index:99;pointer-events:none;white-space:pre;font:bold 15px/1.05 ui-monospace,Menlo,Consolas,monospace;color:var(--fg);text-shadow:0 0 8px var(--fg),2px 2px 0 var(--bg);opacity:0;transition:opacity .3s}
+small{opacity:.8;display:block}
+#err{display:none;position:fixed;inset:40% 10px auto;z-index:5;text-align:center}
+</style>
+</head>
+<body>
+<pre id="sc" aria-hidden="true"></pre>
+<canvas id="oc" style="position:fixed;left:0;top:0;z-index:0;pointer-events:none;display:none"></canvas>
+<pre id="me" aria-hidden="true"></pre>
+<div id="err">[ WebGL is not available in this browser ]</div>
+<main>
+<div>
+<pre id="hd" class="panel"></pre>
+<nav id="nav"></nav>
+</div>
+<div>
+<pre id="panel" class="panel"></pre>
+<input type="file" id="up" accept="image/*" hidden>
+<div id="zoo"></div>
+<small>Move your mouse and the creature follows it. Click to summon a new one. Upload any picture to turn it into 3D ASCII. Press D to download.</small>
+</div>
+</main>
+<script src="three.min.js"></script>
+<script>
+var $=function(i){return document.getElementById(i)};
+var C=[
+{n:'MONKEY',bg:'#0b2a14',fg:'#4ade80',ch:'|/Y&@;l   ',a:String.raw`
+  .-"-.
+ (o\_/o)
+ /'._.'\
+(  ___  )
+ "-" "-"
+`},
+{n:'FISH',bg:'#04243a',fg:'#38bdf8',ch:'~~~o.°    ',a:String.raw`
+   o
+><(((°>
+     O
+`},
+{n:'MAN',bg:'#1c1917',fg:'#fbbf24',ch:'#[]|_.=   ',a:String.raw`
+  O
+ /|\
+ / \
+`},
+{n:'ROBOT',bg:'#08081a',fg:'#22d3ee',ch:'0101+-=   ',a:String.raw`
+ [o_o]
+ /|=|\
+  d b
+`},
+{n:'ALIEN',bg:'#1a0a2e',fg:'#c084fc',ch:'*.+°·     ',a:String.raw`
+  .-.
+ (o o)
+ /|||\
+  / \
+`},
+{n:'CAT',bg:'#2a1408',fg:'#fb923c',ch:'oO@~.,z   ',a:String.raw`
+ /\_/\
+( o.o )
+ > ^ <
+`},
+{n:'GHOST',bg:'#14161f',fg:'#e5e7eb',ch:".:'~      ",a:String.raw`
+ .-.
+(o o)
+| O |
+|___|
+`},
+{n:'ROCKET',bg:'#0a0f2a',fg:'#f87171',ch:'*.+·   ',a:String.raw`
+  /\
+ |==|
+ |  |
+/_||_\
+ /\/\
+`},
+{n:'TREE',bg:'#052e16',fg:'#a3e635',ch:'^Y|*.   ',a:String.raw`
+  ^
+ /^\
+/^^^\
+  |
+`},
+{n:'HOUSE',bg:'#2b1020',fg:'#f472b6',ch:'[]#=_|   ',a:String.raw`
+  /\
+ /__\
+ |[]|
+`},
+{n:'DUCK',bg:'#2a2606',fg:'#facc15',ch:'~.oO   ',a:String.raw`
+  __
+<(o )___
+ ( ._>
+`},
+{n:'SNOWMAN',bg:'#0c1a2b',fg:'#bae6fd',ch:"*.°'   ",a:String.raw`
+  _
+ (o)
+(___)
+(___)
+`},
+{n:'SATURN',bg:'#1f0a0a',fg:'#f59e0b',ch:'o.O*+   ',a:String.raw`
+  ___
+-(   )-
+  ---
+`},
+{n:'CAR',bg:'#1a1a1a',fg:'#f87171',ch:'=-_o.   ',a:String.raw`
+   ___
+ _/_|_\_
+(_o___o_)
+`},
+{n:'DINO',bg:'#0f2a1a',fg:'#34d399',ch:'^~.,v   ',a:String.raw`
+    __
+   (o >
+ /\/ /
+(__)_)
+`},
+{n:'UFO',bg:'#0b1020',fg:'#a3e635',ch:'*.+-   ',a:String.raw`
+  .--.
+ (_oo_)
+-=====-
+`},
+{n:'MUSHROOM',bg:'#2a0f14',fg:'#fb7185',ch:'o.,*   ',a:String.raw`
+ .-o-.
+(o.o.o)
+  | |
+`},
+{n:'CACTUS',bg:'#2a1f08',fg:'#bef264',ch:'|.:*.   ',a:String.raw`
+ _
+| | _
+| || |
+|_||_|
+`},
+{n:'DIAMOND',bg:'#0b1f2e',fg:'#67e8f9',ch:'<>*.+   ',a:String.raw`
+ /\
+<  >
+ \/
+`}
+];
+function box(rows,w){var l='+'+'-'.repeat(w)+'+';return [l].concat(rows.map(function(r){return '| '+r.padEnd(w-2)+' |'})).concat([l]).join('\n')}
+var W=40,cur=0,last=0,curTab='HOME';
+$('hd').textContent=box(['  A S C I I - 3 D','  a world built from letters'],W);
+
+/* ---------- UI ---------- */
+var tabs={
+ HOME:function(){return box(['> now showing: '+C[cur].n,'> this 3D model is rendered live','  and converted into text.'],W)},
+ ABOUT:function(){return box(['engine : three.js -> ascii','ramp   : 70 levels, auto-contrast','palette: '+C[cur].fg,'mouse  : creature follows it'],W)},
+ ZOO:function(){return box(['pick a creature below:'],W)}
+};
+function tab(t){curTab=t;$('panel').textContent=tabs[t]();[].forEach.call($('nav').children,function(b){b.classList.toggle('on',b.dataset.t===t)})}
+Object.keys(tabs).forEach(function(t){var b=document.createElement('button');b.textContent='[ '+t+' ]';b.dataset.t=t;b.onclick=function(){tab(t)};$('nav').appendChild(b)});
+C.forEach(function(c,i){var b=document.createElement('button');b.textContent='[ '+c.n+' ]';b.onclick=function(e){e.stopPropagation();last=Date.now();set(i)};$('zoo').appendChild(b)});
+
+/* ---------- 3D ---------- */
+var R,S,cam,obj,ring,light,cvs,ctx,cols=60,rows=30,fs=13,lh=16,reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+var mx=.5,my=.5,sx=.5,sy=.5,spin=0,pop=1,pic=false,oc=$('oc'),ox=oc.getContext('2d'),RAMP=String.raw`$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\|()1{}[]?-_+~<>i!lI;:,"^'. `.split('').reverse().join(''),M;
+try{
+ R=new THREE.WebGLRenderer({antialias:false,alpha:true});
+ R.setClearColor(0x000000,0);
+ S=new THREE.Scene();
+ cam=new THREE.PerspectiveCamera(50,1,.1,50);cam.position.z=8;
+ S.add(new THREE.AmbientLight(0xffffff,.35));
+ light=new THREE.DirectionalLight(0xffffff,1);light.position.set(3,4,6);S.add(light);
+ M=new THREE.MeshLambertMaterial({color:0xffffff});
+ ring=new THREE.Group();
+ for(var k=0;k<14;k++){var o=new THREE.Mesh(new THREE.OctahedronGeometry(.18),M),a=k/14*Math.PI*2;o.position.set(Math.cos(a)*4,Math.sin(a*2)*.6,Math.sin(a)*4);ring.add(o)}
+ S.add(ring);
+ cvs=document.createElement('canvas');ctx=cvs.getContext('2d',{willReadFrequently:true});
+}catch(e){$('err').style.display='block'}
+
+function P(g,geo,x,y,z,sx_,sy_,sz_,rx,ry,rz){var m=new THREE.Mesh(geo,M);m.position.set(x,y,z);m.scale.set(sx_||1,sy_||1,sz_||1);m.rotation.set(rx||0,ry||0,rz||0);g.add(m);return m}
+var SP=function(r){return new THREE.SphereGeometry(r,20,14)},CY=function(a,b,h){return new THREE.CylinderGeometry(a,b,h,16)},CO=function(r,h){return new THREE.ConeGeometry(r,h,16)},BX=function(a,b,c){return new THREE.BoxGeometry(a,b,c)};
+function mk(i){
+ var g=new THREE.Group();
+ if(i==0){P(g,SP(1),0,.9,0);P(g,SP(.38),-1,1,0);P(g,SP(.38),1,1,0);P(g,SP(.5),0,.6,.8,1,.7,.8);P(g,SP(1.1),0,-1,0,1,1.1,.9);P(g,CY(.22,.18,1.6),-1.5,-1,0,1,1,1,0,0,.5);P(g,CY(.22,.18,1.6),1.5,-1,0,1,1,1,0,0,-.5);P(g,new THREE.TorusGeometry(.7,.13,8,20,4.2),0,-1.8,-1,1,1,1,0,0,2)}
+ if(i==1){P(g,SP(1),0,0,0,1.9,1.1,.6);P(g,CO(.9,1.5),-2.5,0,0,1,1,.4,0,0,-Math.PI/2);P(g,CO(.5,1),0,1.1,0,1,1,.3,0,0,-.4);P(g,CO(.4,.9),.2,-1,0,1,1,.3,0,0,Math.PI+.4);P(g,SP(.12),1.4,.25,.5)}
+ if(i==2){P(g,SP(.6),0,2.1,0);P(g,CY(.5,.55,1.8),0,.7,0);P(g,CY(.18,.18,1.7),-.95,.7,0,1,1,1,0,0,.25);P(g,CY(.18,.18,1.7),.95,.7,0,1,1,1,0,0,-.25);P(g,CY(.22,.2,2),-.3,-1.2,0);P(g,CY(.22,.2,2),.3,-1.2,0)}
+ if(i==3){P(g,BX(1.8,1.8,1.2),0,0,0);P(g,BX(1.2,1,1),0,1.8,0);P(g,CY(.06,.06,.8),0,2.7,0);P(g,SP(.18),0,3.2,0);P(g,BX(.4,1.5,.4),-1.3,0,0);P(g,BX(.4,1.5,.4),1.3,0,0);P(g,BX(.5,1.3,.5),-.5,-1.5,0);P(g,BX(.5,1.3,.5),.5,-1.5,0)}
+ if(i==4){P(g,new THREE.IcosahedronGeometry(1.3,1),0,.8,0,1,1.3,1);P(g,CY(.06,.06,1),-.6,2.6,0,1,1,1,0,0,.4);P(g,CY(.06,.06,1),.6,2.6,0,1,1,1,0,0,-.4);P(g,SP(.15),-.8,3.1,0);P(g,SP(.15),.8,3.1,0);P(g,CO(.7,1.8),0,-1.6,0,1,1,1,Math.PI,0,0)}
+ if(i==5){P(g,SP(1),0,1.1,0,1.2,1,1);P(g,CO(.4,.9),-.8,2.1,0,1,1,1,0,0,.3);P(g,CO(.4,.9),.8,2.1,0,1,1,1,0,0,-.3);P(g,SP(1),0,-.8,0,1.3,1.2,1);P(g,new THREE.TorusGeometry(.9,.15,8,20,4),1.7,-.8,0,1,1,1,0,0,1.2)}
+ if(i==6){P(g,SP(1.3),0,.8,0,1,1.1,1);P(g,CY(1.3,1.3,1.8),0,-.6,0);for(var k=-1;k<2;k++)P(g,SP(.45),k*.85,-1.5,0);P(g,SP(.3),-1.5,0,0,1,1,1);P(g,SP(.3),1.5,0,0)}
+ if(i==7){P(g,CY(.7,.7,3),0,0,0);P(g,CO(.7,1.3),0,2.1,0);P(g,SP(.3),0,.6,.6);P(g,CO(.4,1.2),-.9,-1.2,0,1,1,.4,0,0,.35);P(g,CO(.4,1.2),.9,-1.2,0,1,1,.4,0,0,-.35);P(g,CO(.5,1.2),0,-2.2,0,1,1,1,Math.PI,0,0)}
+ if(i==8){P(g,CY(.3,.4,1.4),0,-1.8,0);P(g,CO(1.7,1.6),0,-.5,0);P(g,CO(1.4,1.5),0,.6,0);P(g,CO(1,1.3),0,1.6,0);P(g,SP(.2),0,2.5,0)}
+ if(i==9){P(g,BX(3,2,2.2),0,-.8,0);P(g,new THREE.ConeGeometry(2.4,1.4,4),0,.9,0,1,1,.9,0,Math.PI/4,0);P(g,BX(.6,1.1,.1),0,-1.3,1.15);P(g,BX(.4,.9,.4),.9,1.5,-.3)}
+ if(i==10){P(g,SP(1.2),0,-.5,0,1.3,1,1);P(g,SP(.7),1.2,.9,0);P(g,BX(.8,.15,.5),1.9,.8,0);P(g,CO(.4,.9),-1.8,0,0,1,1,1,0,0,Math.PI/2);P(g,SP(.6),0,-.3,.9,1.3,.6,.3)}
+ if(i==11){P(g,SP(1.3),0,-1.5,0);P(g,SP(.95),0,.2,0);P(g,SP(.65),0,1.4,0);P(g,CO(.12,.6),0,1.4,.7,1,1,1,Math.PI/2,0,0);P(g,CY(.5,.5,.6),0,2.3,0);P(g,CY(.85,.85,.08),0,2,0);P(g,CY(.06,.06,1.4),-1.2,.5,0,1,1,1,0,0,.9);P(g,CY(.06,.06,1.4),1.2,.5,0,1,1,1,0,0,-.9)}
+ if(i==12){P(g,SP(1.4),0,0,0);P(g,new THREE.TorusGeometry(2.4,.12,6,48),0,0,0,1,1,1,1.2,0,.3);P(g,new THREE.TorusGeometry(2.9,.08,6,48),0,0,0,1,1,1,1.2,0,.3)}
+ if(i==13){P(g,BX(3.4,.9,1.5),0,-.6,0);P(g,BX(1.7,.8,1.3),-.1,.2,0);for(var a=-1;a<2;a+=2)for(var b=-1;b<2;b+=2)P(g,CY(.5,.5,.3),a*1.1,-1.2,b*.8,1,1,1,Math.PI/2,0,0);P(g,SP(.16),1.7,-.5,.5);P(g,SP(.16),1.7,-.5,-.5)}
+ if(i==14){P(g,SP(1.2),0,-.3,0,1.4,1,.9);P(g,SP(.7),1.8,1.2,0);P(g,BX(.9,.5,.6),2.5,1.1,0);P(g,CY(.45,.3,1.8),1.3,.4,0,1,1,1,0,0,-.6);P(g,CO(.6,2.2),-2.3,-.3,0,1,1,1,0,0,Math.PI/2);P(g,CY(.3,.25,1.2),-.6,-1.5,.4);P(g,CY(.3,.25,1.2),.7,-1.5,-.4);P(g,CO(.25,.6),-.6,.9,0);P(g,CO(.25,.6),0,1.1,0);P(g,CO(.25,.6),.6,.9,0)}
+ if(i==15){P(g,SP(1.6),0,0,0,1.8,.35,1.8);P(g,SP(.8),0,.5,0,1,.8,1);for(var k=0;k<6;k++){var q=k/6*Math.PI*2;P(g,SP(.15),Math.cos(q)*2.3,-.15,Math.sin(q)*2.3)}P(g,CO(1.3,2.2),0,-1.5,0,1,1,1,Math.PI,0,0)}
+ if(i==16){P(g,CY(.6,.8,1.6),0,-.8,0);P(g,SP(1.8),0,.6,0,1,.6,1);P(g,SP(.3),.9,1.35,.9);P(g,SP(.3),-.9,1.3,.9);P(g,SP(.3),0,1.6,-.4)}
+ if(i==17){P(g,CY(.6,.6,3.2),0,0,0);P(g,CY(.3,.3,1.1),-.8,.2,0,1,1,1,0,0,Math.PI/2);P(g,CY(.3,.3,1.2),-1.3,.7,0);P(g,CY(.3,.3,1.1),.8,.7,0,1,1,1,0,0,Math.PI/2);P(g,CY(.3,.3,1.2),1.3,1.2,0);P(g,CY(.9,.7,.8),0,-2,0);P(g,SP(.22),0,1.8,0)}
+ if(i==18){P(g,new THREE.OctahedronGeometry(1.8),0,0,0,1,1.4,1);P(g,new THREE.OctahedronGeometry(.5),2.2,.8,0);P(g,new THREE.OctahedronGeometry(.4),-2.1,-.8,0)}
+ return g;
+}
+function resize(){
+ if(!R)return;
+ cols=Math.min(pic?250:170,Math.floor(innerWidth/(pic?5:7.8)));fs=innerWidth/cols/.6;lh=fs*1.2;rows=Math.floor(innerHeight/lh);
+ var s=$('sc').style;s.fontSize=fs+'px';s.lineHeight=lh+'px';s.width=innerWidth+'px';s.height=innerHeight+'px';
+ R.setSize(cols*2,rows*2,false);cvs.width=cols;cvs.height=rows;ctx.imageSmoothingQuality='high';
+ var dp=Math.min(2,devicePixelRatio||1);oc.width=innerWidth*dp;oc.height=innerHeight*dp;oc.style.width=innerWidth+'px';oc.style.height=innerHeight+'px';ox.setTransform(dp,0,0,dp,0,0);ox.font=fs+'px ui-monospace,Menlo,Consolas,monospace';ox.textBaseline='alphabetic';
+ cam.aspect=innerWidth/innerHeight;cam.position.z=cam.aspect<.9?12:8;cam.updateProjectionMatrix();
+}
+function star(x,y,t){var h=((x*73856093)^(y*19349663))>>>0;if(h%47)return ' ';var c=C[cur].ch;return (((h>>6)+(t>>9))%3?' ':c[(h>>3)%c.length])}
+function frame(ts){
+ requestAnimationFrame(frame);
+ if(!R||!obj)return;
+ sx+=(mx-sx)*.1;sy+=(my-sy)*.1;
+ if(!reduced)spin+=.012;
+ pop=Math.min(1,pop+.04);var e=1-Math.pow(1-pop,3);
+ var hh=Math.tan(25*Math.PI/180)*cam.position.z,hw=hh*cam.aspect,bs=pic?Math.min(hw*1.9/obj.userData.pw,hh*1.9/obj.userData.ph):1;obj.scale.setScalar(Math.max(.01,e*bs));ring.visible=!pic;
+ obj.rotation.y=pic?(sx-.5)*1.2:spin+(sx-.5)*3.2;obj.rotation.x=pic?(sy-.5)*.6:(sy-.5)*1;
+ var hh=Math.tan(25*Math.PI/180)*cam.position.z,hw=hh*cam.aspect;
+ var fa=pic?.25:1;obj.position.set((sx-.5)*2*hw*.75*fa,-(sy-.5)*2*hh*.7*fa+(pic?0:Math.sin(ts/700)*.15),0);
+ ring.position.set(obj.position.x,obj.position.y,0);
+ ring.rotation.y=-spin*.8+(sx-.5);ring.rotation.x=.4;
+ light.position.set((sx-.5)*14+1.5*Math.cos(ts/2500),-(sy-.5)*10+3,6);
+ R.render(S,cam);
+ ctx.clearRect(0,0,cols,rows);ctx.drawImage(R.domElement,0,0,cols,rows);
+ var d=ctx.getImageData(0,0,cols,rows).data,out=[],t=ts|0,N=RAMP.length-1,lo=255,hi=0,L=new Float32Array(cols*rows);
+ for(var j=0;j<cols*rows;j++){var q=j*4;if(d[q+3]<60){L[j]=-1;continue}var v=d[q]*.299+d[q+1]*.587+d[q+2]*.114;L[j]=v;if(v<lo)lo=v;if(v>hi)hi=v}
+ var rg=Math.max(40,hi-lo);
+ if(pic){oc.style.display='block';ox.clearRect(0,0,innerWidth,innerHeight);var cw=innerWidth/cols;
+  for(var y=0;y<rows;y++)for(var x=0;x<cols;x++){var j=y*cols+x,v=L[j];if(v<0)continue;var l=Math.pow((v-lo)/rg,.8),ch=RAMP[Math.min(N,Math.floor(l*N))];if(ch===' ')continue;var q=j*4;ox.fillStyle='rgb('+Math.min(255,d[q]*1.2+30)+','+Math.min(255,d[q+1]*1.2+30)+','+Math.min(255,d[q+2]*1.2+30)+')';ox.fillText(ch,x*cw,(y+.85)*lh)}
+  $('sc').textContent='';return}
+ oc.style.display='none';
+ for(var y=0;y<rows;y++){var line='';for(var x=0;x<cols;x++){var j=y*cols+x,v=L[j];if(v<0){line+=star(x,y,t)}else{var l=Math.pow((v-lo)/rg,.8);line+=RAMP[Math.min(N,Math.max(2,Math.floor(l*N)))]}}out.push(line)}
+ $('sc').textContent=out.join('\n');
+}
+function set(i){
+ cur=i;var wp=pic,c=C[i],r=document.documentElement.style;pic=false;if(wp)resize();
+ r.setProperty('--bg',c.bg);r.setProperty('--fg',c.fg);
+ $('me').textContent=c.a.replace(/^\n|\n$/g,'');
+ if(R){if(obj)S.remove(obj);obj=mk(i);S.add(obj);pop=0}
+ tab(curTab);
+}
+function rnd(){var i;do{i=Math.floor(Math.random()*C.length)}while(i===cur);set(i)}
+
+/* ---------- pointer ---------- */
+addEventListener('pointermove',function(e){mx=e.clientX/innerWidth;my=e.clientY/innerHeight});
+addEventListener('pointerdown',function(e){mx=e.clientX/innerWidth;my=e.clientY/innerHeight;if(e.target.closest('button'))return;rnd()});
+addEventListener('resize',resize);
+
+function note(a){$('panel').textContent=box(a,W)}
+function snap(){
+ var dp=Math.min(2,devicePixelRatio||1),Wd=innerWidth,Hd=innerHeight,c=document.createElement('canvas');c.width=Wd*dp;c.height=Hd*dp;
+ var x=c.getContext('2d'),cs=getComputedStyle(document.documentElement);x.scale(dp,dp);
+ x.fillStyle=cs.getPropertyValue('--bg').trim()||'#000';x.fillRect(0,0,Wd,Hd);
+ if(pic){x.drawImage(oc,0,0,Wd,Hd)}else{
+  x.font=fs+'px ui-monospace,Menlo,Consolas,monospace';x.fillStyle=cs.getPropertyValue('--fg').trim()||'#fff';
+  var cw=Wd/cols;$('sc').textContent.split('\n').forEach(function(s,y){for(var k=0;k<s.length;k++)if(s[k]!==' ')x.fillText(s[k],k*cw,(y+.85)*lh)});
+ }
+ return new Promise(function(res){c.toBlob(res,'image/png')});
+}
+var dl=document.createElement('button');dl.textContent='[ v DOWNLOAD IMAGE (D) ]';
+dl.onclick=function(e){
+ e.stopPropagation();
+ var fn=pic?'ascii-picture.png':'ascii-'+C[cur].n.toLowerCase()+'.png';
+ snap().then(function(b){
+  if(!b)throw {code:'bad_request'};
+  var p=(window.claude&&claude.use)?claude.use('downloads'):Promise.resolve(null);
+  return p.then(function(d){
+   if(d)return d.save({filename:fn,data:b});
+   var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=fn;document.body.appendChild(a);a.click();a.remove();
+  });
+ }).then(function(){note(['image saved:',fn])}).catch(function(er){
+  note([er&&er.code==='declined'?'download cancelled.':'could not save the image here.','open the page on claude.ai to save.'])});
+};
+$('zoo').insertBefore(dl,$('zoo').firstChild);
+addEventListener('keydown',function(e){
+ if((e.key==='d'||e.key==='D')&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!e.repeat){e.preventDefault();dl.click()}
+});
+var ub=document.createElement('button');ub.textContent='[ + UPLOAD PICTURE ]';ub.onclick=function(e){e.stopPropagation();$('up').click()};$('zoo').insertBefore(ub,$('zoo').firstChild);
+$('up').onchange=function(e){
+ var f=e.target.files[0];e.target.value='';if(!f||!R)return;
+ var u=URL.createObjectURL(f),im=new Image();
+ im.onload=function(){
+  var s=Math.min(1,512/Math.max(im.width,im.height)),w=Math.max(1,Math.round(im.width*s)),h=Math.max(1,Math.round(im.height*s)),c=document.createElement('canvas');
+  c.width=w;c.height=h;c.getContext('2d').drawImage(im,0,0,w,h);
+  var t=new THREE.CanvasTexture(c);t.minFilter=THREE.LinearFilter;t.generateMipmaps=false;
+  var asp=w/h,pw=asp>=1?5:5*asp,ph=asp>=1?5/asp:5,g=new THREE.Group();
+  g.add(new THREE.Mesh(new THREE.BoxGeometry(pw,ph,.3),new THREE.MeshBasicMaterial({map:t})));
+  g.userData={pw:pw,ph:ph};if(obj)S.remove(obj);obj=g;S.add(obj);pop=0;pic=true;resize();URL.revokeObjectURL(u);
+  $('panel').textContent=box(['picture loaded!','converted into 3D ASCII.','move the mouse to rotate it,','click anywhere for a creature.'],W);
+ };
+ im.onerror=function(){$('panel').textContent=box(['could not read that file.','try a JPG or PNG picture.'],W)};
+ im.src=u;
+};
+resize();set(Math.floor(Math.random()*C.length));requestAnimationFrame(frame);
+</script>
+</body>
+</html>
